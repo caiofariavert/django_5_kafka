@@ -28,6 +28,30 @@ def producer(
         "producer_id": settings.KAFKA_CLIENT_ID,
         "hostname": socket.gethostname(),
     }
+    delivery_info = {}
+
+    def delivery_report(err, msg):
+        """
+        Reports the success or failure of a message delivery.
+        Args:
+            err (KafkaError): The error that occurred on None on success.
+            msg (Message): The message that was produced or failed.
+        """
+
+        if err is not None:
+            logger.error(f"Message delivery failed: {err}")
+            delivery_info['error'] = str(err)
+        else:
+            logger.info(
+                f"Message delivered to {msg.topic()} [partition {msg.partition()}] @ offset {msg.offset()}"
+            )
+            delivery_info.update({
+                "topic": msg.topic(),
+                "key": msg.key().decode() if msg.key() else None,
+                "message": msg.value().decode() if msg.value() else None,
+                "partition": msg.partition(),
+                "offset": msg.offset(),
+            })
 
     producer.produce(
         topic,
@@ -38,15 +62,4 @@ def producer(
     )
     producer.flush()
 
-
-def delivery_report(err, msg):
-    """
-    Reports the success or failure of a message delivery.
-    Args:
-        err (KafkaError): The error that occurred on None on success.
-        msg (Message): The message that was produced or failed.
-    """
-
-    if err is not None:
-        logger.error("Delivery failed for User record {}: {}".format(msg.key(), err))
-        return
+    return delivery_info
