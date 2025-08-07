@@ -39,12 +39,9 @@ def producer(
         """
 
         if err is not None:
-            logger.error(f"Message delivery failed: {err}")
+            logger.error("Delivery failed for User record {}: {}".format(msg.key(), err))
             delivery_info['error'] = str(err)
         else:
-            logger.info(
-                f"Message delivered to {msg.topic()} [partition {msg.partition()}] @ offset {msg.offset()}"
-            )
             delivery_info.update({
                 "topic": msg.topic(),
                 "key": msg.key().decode() if msg.key() else None,
