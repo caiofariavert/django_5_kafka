@@ -1,6 +1,6 @@
 [project]
-name = "django-5-kafka"
-version = "2.2.0"
+name = "django_kafka"
+version = "2.2.2"
 description = ""
 authors = [
     {name = "Caio Faria",email = "caio.faria@vert-capital.com"}
