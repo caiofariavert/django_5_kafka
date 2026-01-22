@@ -9,6 +9,7 @@ from django.conf import settings
 # Configura o logger específico para a sua biblioteca
 logger = logging.getLogger(__name__)
 
+
 def producer(
     topic: str, message: str, key: str = None, on_delivery: FunctionType = None
 ) -> None:
@@ -27,32 +28,35 @@ def producer(
         "producer_id": settings.KAFKA_CLIENT_ID,
         "hostname": socket.gethostname(),
     }
+    delivery_info = {}
+
+    def delivery_report(err, msg):
+        """
+        Reports the success or failure of a message delivery.
+        Args:
+            err (KafkaError): The error that occurred on None on success.
+            msg (Message): The message that was produced or failed.
+        """
+
+        if err is not None:
+            logger.error("Delivery failed for User record {}: {}".format(msg.key(), err))
+            delivery_info['error'] = str(err)
+        else:
+            delivery_info.update({
+                "topic": msg.topic(),
+                "key": msg.key().decode() if msg.key() else None,
+                "message": msg.value().decode() if msg.value() else None,
+                "partition": msg.partition(),
+                "offset": msg.offset(),
+            })
 
     producer.produce(
-        topic, key=key, value=message, on_delivery=on_delivery or delivery_report, headers=headers
+        topic,
+        key=key,
+        value=message,
+        on_delivery=on_delivery or delivery_report,
+        headers=headers,
     )
     producer.flush()
 
-
-def delivery_report(err, msg):
-    """
-    Reports the success or failure of a message delivery.
-    Args:
-        err (KafkaError): The error that occurred on None on success.
-        msg (Message): The message that was produced or failed.
-    """
-
-    if err is not None:
-        # print("Delivery failed for User record {}: {}".format(msg.key(), err))
-        logger.error("Delivery failed for User record {}: {}".format(msg.key(), err))
-        return
-    # print(
-    #     "User record {} successfully produced to {} [{}] at offset {}".format(
-    #         msg.key(), msg.topic(), msg.partition(), msg.offset()
-    #     )
-    # )
-    logger.info(
-        "User record {} successfully produced to {} [{}] at offset {}".format(
-            msg.key(), msg.topic(), msg.partition(), msg.offset()
-        )
-    )
+    return delivery_info

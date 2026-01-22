@@ -14,7 +14,11 @@ def kafka_consumer_run() -> None:
     conf = {
         "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVER,
         "group.id": settings.KAFKA_GROUP_ID,
-        "auto.offset.reset": settings.KAFKA_OFFSET_RESET if hasattr(settings, "KAFKA_OFFSET_RESET") else "earliest",
+        "auto.offset.reset": (
+            settings.KAFKA_OFFSET_RESET
+            if hasattr(settings, "KAFKA_OFFSET_RESET")
+            else "earliest"
+        ),
     }
 
     consumer: Consumer = Consumer(conf)
@@ -33,12 +37,19 @@ def kafka_consumer_run() -> None:
                 # print("Consumer error: {}".format(msg.error()))
                 logger.error("Consumer error: {}".format(msg.error()))
                 continue
-
             callback: str = settings.KAFKA_TOPICS.get(msg.topic())
 
             if callback is None:
                 # print("No callback found for topic: {}".format(msg.topic()))
                 logger.error("No callback found for topic: {}".format(msg.topic()))
+                continue
+
+            if callback == "":
+                # Skip empty callbacks
+                # logger.warning(
+                #     "Empty callback for topic: {}. Skipping.".format(msg.topic())
+                # )
+                consumer.commit(message=msg)
                 continue
 
             # call the callback string as function
