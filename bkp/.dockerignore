@@ -1,9 +1,0 @@
-.idea/
-**/*.pyc
-site-packages/
-.coverage
-htmlcov/
-**/local.yaml
-.vscode/
-**/__pycache__/
-**/.cache/
