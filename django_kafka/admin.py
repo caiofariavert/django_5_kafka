@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from confluent_kafka.admin import AdminClient, NewTopic
 from django.conf import settings
@@ -6,8 +7,7 @@ from django.conf import settings
 # Configura o logger específico para a sua biblioteca
 logger = logging.getLogger(__name__)
 
-
-class SetupDjangoKafka:
+class  SetupDjangoKafka():
 
     def create_topics(self, adm: AdminClient, topics) -> None:
         """Create topics"""
@@ -31,6 +31,7 @@ class SetupDjangoKafka:
             except Exception as e:
                 # print("Failed to create topic {}: {}".format(topic, e))
                 logger.error("Failed to create topic {}: {}".format(topic, e))
+
 
     def setup(self) -> None:
         adminClient: AdminClient = AdminClient(
