@@ -3,8 +3,8 @@ import sys
 
 from setuptools import find_packages, setup
 
-if sys.version_info < (3, 12):
-    raise Exception("Only Python 3.12+ is supported")
+if sys.version_info < (3, 13) or sys.version_info >= (4, 0):
+    raise Exception("Only Python 3.13+ is supported")
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
