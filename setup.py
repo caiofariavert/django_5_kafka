@@ -3,7 +3,7 @@ import sys
 
 from setuptools import find_packages, setup
 
-if sys.version_info < (3, 13) or sys.version_info >= (4, 0):
+if sys.version_info < (3, 13):
     raise Exception("Only Python 3.13+ is supported")
 
 with open("README.md", "r") as fh:
@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="django_kafka",
-    version="2.2.1",
+    version="2.2.2",
     author="VertCapital",
     author_email="thiago@vert-capital.com.br",
     description="Producer and Consumer for Kafka and django projects",
@@ -20,8 +20,8 @@ setup(
     url="https://github.com/vert-capital/django-kafka",
     packages=find_packages(exclude=["ez_setup", "examples", "tests", "release"]),
     install_requires=[
-        "Django>=5.2",
-        "confluent-kafka==2.11.0",
+        "Django>=6.0.1,<7.0.0",
+        "confluent-kafka==2.13.0",
     ],
     include_package_data=True,
     zip_safe=False,
