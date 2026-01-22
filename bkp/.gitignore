@@ -1,0 +1,23 @@
+# coverage
+.coverage
+htmlcov/
+
+# python
+**/*.pyc
+site-packages/
+**/__pycache__/
+**/.cache/
+
+# IDEs
+.idea/
+.vscode/
+.data/
+
+#PyEnv
+.python-version
+
+# Environments
+.env
+.venv
+env/
+venv/

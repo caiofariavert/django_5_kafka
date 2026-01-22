@@ -1,0 +1,30 @@
+{
+    "projectTitle": "Vert Django Kafka",
+    "description": "Python Kafka utilities library for Django projects, providing easy integration with Apache Kafka using confluent-kafka",
+    "folders": [],
+    "excludeFolders": [
+        "django_kafka",
+        "examples",
+        ".git",
+        "__pycache__",
+        "*.egg-info",
+        "build",
+        "dist"
+    ],
+    "excludeFiles": [
+        "setup.py",
+        "setup.cfg",
+        "Makefile",
+        "requeriments.txt"
+    ],
+    "rules": [
+        "Always configure DJANGO_KAFKA settings in Django settings.py before using the library",
+        "Use the built-in Django management commands for setting up and running Kafka consumers",
+        "Ensure confluent-kafka==1.9.2 is installed as a dependency",
+        "Use the Producer class for sending messages and Consumer class for receiving messages",
+        "Auto-creation of Kafka topics is supported - configure topic settings in DJANGO_KAFKA",
+        "Always handle exceptions when producing or consuming messages",
+        "Use proper Django logging configuration for debugging Kafka operations"
+    ],
+    "previousVersions": []
+}
