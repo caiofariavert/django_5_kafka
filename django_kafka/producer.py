@@ -39,16 +39,20 @@ def producer(
         """
 
         if err is not None:
-            logger.error("Delivery failed for User record {}: {}".format(msg.key(), err))
-            delivery_info['error'] = str(err)
+            logger.error(
+                "Delivery failed for User record {}: {}".format(msg.key(), err)
+            )
+            delivery_info["error"] = str(err)
         else:
-            delivery_info.update({
-                "topic": msg.topic(),
-                "key": msg.key().decode() if msg.key() else None,
-                "message": msg.value().decode() if msg.value() else None,
-                "partition": msg.partition(),
-                "offset": msg.offset(),
-            })
+            delivery_info.update(
+                {
+                    "topic": msg.topic(),
+                    "key": msg.key().decode() if msg.key() else None,
+                    "message": msg.value().decode() if msg.value() else None,
+                    "partition": msg.partition(),
+                    "offset": msg.offset(),
+                }
+            )
 
     producer.produce(
         topic,

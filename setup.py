@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="django_kafka",
-    version="2.3.0",
+    version="3.0.0",
     author="VertCapital",
     author_email="thiago@vert-capital.com.br",
     description="Producer and Consumer for Kafka and django projects",
