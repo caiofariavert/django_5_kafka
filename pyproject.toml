@@ -13,7 +13,6 @@ dependencies = [
     "black (>=26.1.0,<27.0.0)",
     "django (>=6.0.1,<7.0.0)",
     "confluent-kafka (>=2.13.0,<3.0.0)",
-    "poetry-plugin-export (>=1.10.0,<2.0.0)"
 ]
 
 
