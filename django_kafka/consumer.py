@@ -116,7 +116,7 @@ async def _dispatch(
     queue_name: str,
 ) -> None:
     callback: str = topic_to_callback.get(msg.topic)
-    logger.debug("Processing message | topic: {} | queue: {} | callback: {}".format(msg.topic, queue_name, callback))
+    logger.error("Processing message | topic: {} | queue: {} | callback: {}".format(msg.topic, queue_name, callback))
 
     if callback is None:
         logger.error("No callback found for topic: {}".format(msg.topic))
