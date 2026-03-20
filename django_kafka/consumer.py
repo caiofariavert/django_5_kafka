@@ -131,14 +131,21 @@ async def _dispatch(
 
     try:
         module = importlib.import_module(module_path)
-    except ImportError:
-        logger.error("No module found for action: {}".format(callback))
+    except ImportError as e:
+        logger.error("No module found for action: {} | Details: {}".format(callback, str(e)))
+        return
+    except Exception as e:
+        logger.error("Unexpected error importing action {}: {}".format(callback, str(e)))
         return
 
     try:
         function = getattr(module, function_name)
-    except AttributeError:
-        logger.error("No function found for action: {}".format(callback))
+    except AttributeError as e:
+        logger.error(
+            "No function '{}' found in module '{}' | Available: {}".format(
+                function_name, module_path, dir(module)
+            )
+        )
         return
 
     try:
