@@ -1,22 +1,20 @@
 import asyncio
 import importlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from aiokafka import AIOKafkaConsumer, TopicPartition
-from aiokafka.structs import ConsumerRecord, OffsetAndMetadata
+from aiokafka.structs import OffsetAndMetadata
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-_consumer_instance: AIOKafkaConsumer | None = None
+_consumer_instances: dict[str, AIOKafkaConsumer] = {}
+_executor: ThreadPoolExecutor | None = None
 
 
 def _parse_kafka_topics() -> tuple[dict[str, str], dict[str, list[str]]]:
-    """
-    Parse KAFKA_TOPICS configuração e retorna:
-    - topic_to_callback: {tópico → função}
-    - queue_topics: {fila → [tópicos]}
-    """
+    """Parse KAFKA_TOPICS e retorna topic_to_callback e queue_topics"""
     topic_to_callback = {}
     queue_topics = {}
 
@@ -25,7 +23,6 @@ def _parse_kafka_topics() -> tuple[dict[str, str], dict[str, list[str]]]:
             queue_topics[queue_name] = list(topics_dict.keys())
             topic_to_callback.update(topics_dict)
         else:
-            # backward compatibility: valor direto é a função
             topic_to_callback[queue_name] = topics_dict
             if "default" not in queue_topics:
                 queue_topics["default"] = []
@@ -35,90 +32,66 @@ def _parse_kafka_topics() -> tuple[dict[str, str], dict[str, list[str]]]:
 
 
 async def kafka_consumer_run() -> None:
-    global _consumer_instance
+    global _consumer_instances, _executor
 
     topic_to_callback, queue_topics = _parse_kafka_topics()
+    _executor = ThreadPoolExecutor(max_workers=50)
 
-    all_topics = list(topic_to_callback.keys())
-    consumer = AIOKafkaConsumer(
-        *all_topics,
-        bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVER,
-        group_id=settings.KAFKA_GROUP_ID,
-        auto_offset_reset=getattr(settings, "KAFKA_OFFSET_RESET", "earliest"),
-        enable_auto_commit=False,
-    )
-
-    _consumer_instance = consumer
-    await consumer.start()
-
-    # Criar fila e worker para cada fila
-    queues = {queue_name: asyncio.Queue() for queue_name in queue_topics}
-    reverse_queue_map = {}
+    # Criar um consumer por fila (ou grupo de tópicos)
+    consumers_tasks = []
     for queue_name, topics in queue_topics.items():
-        for topic in topics:
-            reverse_queue_map[topic] = queue_name
-
-    workers = [
-        asyncio.create_task(
-            _queue_worker(queue_name, queues[queue_name], consumer, topic_to_callback)
+        consumer = AIOKafkaConsumer(
+            *topics,
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVER,
+            group_id=settings.KAFKA_GROUP_ID,
+            auto_offset_reset=getattr(settings, "KAFKA_OFFSET_RESET", "earliest"),
+            enable_auto_commit=False,
         )
-        for queue_name in queue_topics
-    ]
+        _consumer_instances[queue_name] = consumer
+        await consumer.start()
+
+        # Cada fila tem sua task de consumo
+        task = asyncio.create_task(
+            _consume_queue(queue_name, consumer, topic_to_callback)
+        )
+        consumers_tasks.append(task)
 
     try:
-        async for msg in consumer:
-            queue_name = reverse_queue_map.get(msg.topic, "default")
-            await queues[queue_name].put(msg)
+        await asyncio.gather(*consumers_tasks)
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        logger.error(e)
+        logger.error(f"Consumer error: {e}")
     finally:
-        # Sinal para workers pararem
-        for queue in queues.values():
-            await queue.put(None)
-
-        # Aguarda conclusão dos workers
-        await asyncio.gather(*workers, return_exceptions=True)
-        await consumer.stop()
-        _consumer_instance = None
+        await _stop_all_consumers()
 
 
-def kafka_consumer_shutdown() -> None:
-    global _consumer_instance
-    if _consumer_instance is not None:
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_consumer_instance.stop())
-        except RuntimeError:
-            asyncio.run(_consumer_instance.stop())
-
-
-async def _queue_worker(
+async def _consume_queue(
     queue_name: str,
-    queue: asyncio.Queue,
     consumer: AIOKafkaConsumer,
     topic_to_callback: dict[str, str],
 ) -> None:
-    """Worker que processa mensagens de uma fila sequencialmente"""
-    while True:
-        msg = await queue.get()
-        if msg is None:  # Sinal para parar
-            break
-
-        await _dispatch(msg, consumer, topic_to_callback, queue_name)
+    """Consume mensagens de uma fila específica"""
+    try:
+        async for msg in consumer:
+            await _dispatch(msg, consumer, topic_to_callback, queue_name)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"Error consuming queue '{queue_name}': {e}")
 
 
 async def _dispatch(
-    msg: ConsumerRecord,
+    msg,
     consumer: AIOKafkaConsumer,
     topic_to_callback: dict[str, str],
     queue_name: str,
 ) -> None:
+    """Processa uma mensagem"""
     callback: str = topic_to_callback.get(msg.topic)
 
     if callback is None:
-        logger.error("No callback found for topic: {}".format(msg.topic))
+        logger.error(f"No callback found for topic: {msg.topic}")
         return
 
     if callback == "":
@@ -126,56 +99,54 @@ async def _dispatch(
         await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
         return
 
-    module_path: str = ".".join(callback.split(".")[:-1])
-    function_name: str = callback.split(".")[-1]
-
-    logger.debug(
-        "Attempting to load callback: {} | module: {} | function: {}".format(
-            callback, module_path, function_name
-        )
-    )
+    module_path = ".".join(callback.split(".")[:-1])
+    function_name = callback.split(".")[-1]
 
     try:
         module = importlib.import_module(module_path)
-        logger.debug("Module loaded successfully: {}".format(module_path))
         function = getattr(module, function_name)
-    except AttributeError:
-        logger.error(
-            "No function '{}' found in module '{}' | Available: {}".format(
-                function_name, module_path, dir(module)
-            )
-        )
-        return
-    except Exception as e:
-        logger.error(
-            "Error importing callback '{}' | module: {} | error: {}".format(
-                callback, module_path, e
-            )
-        )
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Cannot load callback '{callback}': {e}")
         return
 
     try:
-        # Criar um Executor com limite maior de threads
-        # Permite N filas rodar em paralelo mesmo com 1 worker cada
-        from concurrent.futures import ThreadPoolExecutor
-        loop = asyncio.get_event_loop()
-
-        # Reutilizar executor global (criar uma vez no kafka_consumer_run)
-        if not hasattr(kafka_consumer_run, '_executor'):
-            kafka_consumer_run._executor = ThreadPoolExecutor(max_workers=50)
-
-        executor = kafka_consumer_run._executor
+        loop = asyncio.get_running_loop()
 
         if asyncio.iscoroutinefunction(function):
             await loop.run_in_executor(
-                executor,
+                _executor,
                 lambda: asyncio.run(function(consumer=consumer, msg=msg)),
             )
         else:
             await loop.run_in_executor(
-                executor, lambda: function(consumer=consumer, msg=msg)
+                _executor, lambda: function(consumer=consumer, msg=msg)
             )
+
+        tp = TopicPartition(msg.topic, msg.partition)
+        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+        logger.debug(f"Message processed from queue '{queue_name}': {msg.topic}")
     except Exception as e:
-        logger.error(
-            "Error calling action {} in queue '{}': {}".format(callback, queue_name, e)
-        )
+        logger.error(f"Error calling action {callback} in queue '{queue_name}': {e}")
+
+
+async def _stop_all_consumers() -> None:
+    """Fecha todos os consumers"""
+    for queue_name, consumer in _consumer_instances.items():
+        try:
+            await consumer.stop()
+            logger.info(f"Consumer for queue '{queue_name}' stopped")
+        except Exception as e:
+            logger.error(f"Error stopping consumer for queue '{queue_name}': {e}")
+    _consumer_instances.clear()
+
+    if _executor:
+        _executor.shutdown(wait=True)
+
+
+def kafka_consumer_shutdown() -> None:
+    """Shutdown hook"""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_stop_all_consumers())
+    except RuntimeError:
+        asyncio.run(_stop_all_consumers())
