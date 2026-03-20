@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="django_kafka",
-    version="3.0.2",
+    version="3.0.3",
     author="VertCapital",
     author_email="thiago@vert-capital.com.br",
     description="Producer and Consumer for Kafka and django projects",
@@ -20,7 +20,7 @@ setup(
     url="https://github.com/vert-capital/django-kafka",
     packages=find_packages(exclude=["ez_setup", "examples", "tests", "release"]),
     install_requires=[
-        "Django>=5.2",
+        "Django>=5.2.12,<6.0",
         "confluent-kafka==1.9.2",
     ],
     include_package_data=True,
