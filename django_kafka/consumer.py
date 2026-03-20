@@ -46,11 +46,6 @@ async def kafka_consumer_run() -> None:
             group_id=settings.KAFKA_GROUP_ID,
             auto_offset_reset=getattr(settings, "KAFKA_OFFSET_RESET", "earliest"),
             enable_auto_commit=False,
-            # Aumentar timeouts para handlers lentos
-            session_timeout_ms=60000,  # 60s (default 10s)
-            heartbeat_interval_ms=20000,  # 20s (default 3s)
-            max_poll_interval_ms=300000,  # 5 min (default 5 min)
-
         )
         _consumer_instances[queue_name] = consumer
         await consumer.start()
