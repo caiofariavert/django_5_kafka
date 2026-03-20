@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import socket
 from uuid import uuid4
@@ -28,7 +29,7 @@ async def close_producer() -> None:
         _producer_instance = None
 
 
-async def producer(
+async def aproducer(
     topic: str,
     message: str,
     key: str = None,
@@ -60,3 +61,11 @@ async def producer(
     except Exception as e:
         logger.error("Delivery failed for topic {}: {}".format(topic, e))
         return {"error": str(e)}
+
+
+def producer(
+    topic: str,
+    message: str,
+    key: str = None,
+) -> dict:
+    return asyncio.run(aproducer(topic, message, key))
