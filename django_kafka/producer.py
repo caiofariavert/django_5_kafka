@@ -68,4 +68,38 @@ def producer(
     message: str,
     key: str = None,
 ) -> dict:
-    return asyncio.run(aproducer(topic, message, key))
+    if key is None:
+        key = str(uuid4())
+
+    headers = [
+        ("producer_id", getattr(settings, "KAFKA_CLIENT_ID", "").encode()),
+        ("hostname", socket.gethostname().encode()),
+    ]
+
+    async def _run() -> dict:
+        p = AIOKafkaProducer(
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVER,
+            client_id=getattr(settings, "KAFKA_CLIENT_ID", socket.gethostname()),
+        )
+        await p.start()
+        try:
+            metadata = await p.send_and_wait(
+                topic,
+                value=message.encode() if isinstance(message, str) else message,
+                key=key.encode() if isinstance(key, str) else key,
+                headers=headers,
+            )
+            return {
+                "topic": metadata.topic,
+                "partition": metadata.partition,
+                "offset": metadata.offset,
+                "key": key,
+                "message": message,
+            }
+        except Exception as e:
+            logger.error("Delivery failed for topic {}: {}".format(topic, e))
+            return {"error": str(e)}
+        finally:
+            await p.stop()
+
+    return asyncio.run(_run())
