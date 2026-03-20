@@ -116,6 +116,7 @@ async def _dispatch(
     queue_name: str,
 ) -> None:
     callback: str = topic_to_callback.get(msg.topic)
+    logger.debug("Processing message | topic: {} | queue: {} | callback: {}".format(msg.topic, queue_name, callback))
 
     if callback is None:
         logger.error("No callback found for topic: {}".format(msg.topic))
@@ -129,8 +130,11 @@ async def _dispatch(
     module_path: str = ".".join(callback.split(".")[:-1])
     function_name: str = callback.split(".")[-1]
 
+    logger.debug("Attempting to load callback: {} | module: {} | function: {}".format(callback, module_path, function_name))
+
     try:
         module = importlib.import_module(module_path)
+        logger.debug("Module loaded successfully: {}".format(module_path))
     except ImportError as e:
         logger.error("No module found for action: {} | Details: {}".format(callback, str(e)))
         return
