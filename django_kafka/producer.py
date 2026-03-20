@@ -1,66 +1,62 @@
 import logging
 import socket
-from types import FunctionType
 from uuid import uuid4
 
-from confluent_kafka import Producer
+from aiokafka import AIOKafkaProducer
 from django.conf import settings
 
-# Configura o logger específico para a sua biblioteca
 logger = logging.getLogger(__name__)
 
+_producer_instance: AIOKafkaProducer | None = None
 
-def producer(
-    topic: str, message: str, key: str = None, on_delivery: FunctionType = None
-) -> None:
 
+async def get_producer() -> AIOKafkaProducer:
+    global _producer_instance
+    if _producer_instance is None:
+        _producer_instance = AIOKafkaProducer(
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVER,
+            client_id=getattr(settings, "KAFKA_CLIENT_ID", socket.gethostname()),
+        )
+        await _producer_instance.start()
+    return _producer_instance
+
+
+async def close_producer() -> None:
+    global _producer_instance
+    if _producer_instance is not None:
+        await _producer_instance.stop()
+        _producer_instance = None
+
+
+async def producer(
+    topic: str,
+    message: str,
+    key: str = None,
+) -> dict:
     if key is None:
-        key: str = str(uuid4())
+        key = str(uuid4())
 
-    conf = {
-        "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVER,
-        "client.id": socket.gethostname(),
-    }
+    headers = [
+        ("producer_id", getattr(settings, "KAFKA_CLIENT_ID", "").encode()),
+        ("hostname", socket.gethostname().encode()),
+    ]
 
-    producer = Producer(conf)
+    kafka_producer = await get_producer()
 
-    headers = {
-        "producer_id": settings.KAFKA_CLIENT_ID,
-        "hostname": socket.gethostname(),
-    }
-    delivery_info = {}
-
-    def delivery_report(err, msg):
-        """
-        Reports the success or failure of a message delivery.
-        Args:
-            err (KafkaError): The error that occurred on None on success.
-            msg (Message): The message that was produced or failed.
-        """
-
-        if err is not None:
-            logger.error(
-                "Delivery failed for User record {}: {}".format(msg.key(), err)
-            )
-            delivery_info["error"] = str(err)
-        else:
-            delivery_info.update(
-                {
-                    "topic": msg.topic(),
-                    "key": msg.key().decode() if msg.key() else None,
-                    "message": msg.value().decode() if msg.value() else None,
-                    "partition": msg.partition(),
-                    "offset": msg.offset(),
-                }
-            )
-
-    producer.produce(
-        topic,
-        key=key,
-        value=message,
-        on_delivery=on_delivery or delivery_report,
-        headers=headers,
-    )
-    producer.flush()
-
-    return delivery_info
+    try:
+        metadata = await kafka_producer.send_and_wait(
+            topic,
+            value=message.encode() if isinstance(message, str) else message,
+            key=key.encode() if isinstance(key, str) else key,
+            headers=headers,
+        )
+        return {
+            "topic": metadata.topic,
+            "partition": metadata.partition,
+            "offset": metadata.offset,
+            "key": key,
+            "message": message,
+        }
+    except Exception as e:
+        logger.error("Delivery failed for topic {}: {}".format(topic, e))
+        return {"error": str(e)}

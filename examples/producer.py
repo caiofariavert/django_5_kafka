@@ -1,26 +1,22 @@
-from django_kafka.django_kafka.producer import producer
+import asyncio
+
+from django_kafka.django_kafka.producer import close_producer, producer
 
 # settings.KAFKA_BOOTSTRAP_SERVER = "localhost:9092"
 # settings.KAFKA_CLIENT_ID = "client_id"
 
-# Simple producer
-producer("topic", "message")
+
+async def main():
+    # Simple producer
+    info = await producer("topic", "message")
+    print(info)
+
+    # Producer with explicit key
+    info = await producer("topic", "message", key="my-key")
+    print(info)
+
+    # Fechar o producer ao encerrar a aplicação
+    await close_producer()
 
 
-# producer with key
-producer("topic", "message", key="key")
-
-
-# producer with on_delivery callback
-def on_delivery(err, msg):
-    if err is not None:
-        print("Delivery failed for User record {}: {}".format(msg.key(), err))
-        return
-    print(
-        "User record {} successfully produced to {} [{}] at offset {}".format(
-            msg.key(), msg.topic(), msg.partition(), msg.offset()
-        )
-    )
-
-
-producer("topic", "message", on_delivery=on_delivery)
+asyncio.run(main())

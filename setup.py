@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="django_kafka",
-    version="3.0.3",
+    version="2.0.0-alpha.0",
     author="VertCapital",
     author_email="thiago@vert-capital.com.br",
     description="Producer and Consumer for Kafka and django projects",
@@ -21,7 +21,7 @@ setup(
     packages=find_packages(exclude=["ez_setup", "examples", "tests", "release"]),
     install_requires=[
         "Django>=5.2.12,<6.0",
-        "confluent-kafka==1.9.2",
+        "aiokafka>=0.13.0,<0.14.0",
     ],
     include_package_data=True,
     zip_safe=False,
