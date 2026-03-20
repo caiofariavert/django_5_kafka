@@ -3,15 +3,15 @@ import sys
 
 from setuptools import find_packages, setup
 
-if sys.version_info < (3, 12):
-    raise Exception("Only Python 3.12+ is supported")
+if sys.version_info < (3, 12) or sys.version_info >= (3, 14):
+    raise Exception("Only Python 3.12 and 3.13 are supported")
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
     name="django_kafka",
-    version="2.0.0-alpha.2",
+    version="2.0.0-alpha.3",
     author="VertCapital",
     author_email="thiago@vert-capital.com.br",
     description="Producer and Consumer for Kafka and django projects",
