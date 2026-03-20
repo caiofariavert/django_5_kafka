@@ -155,25 +155,26 @@ async def _dispatch(
         return
 
     try:
-        loop = asyncio.get_running_loop()
+        # Criar um Executor com limite maior de threads
+        # Permite N filas rodar em paralelo mesmo com 1 worker cada
+        from concurrent.futures import ThreadPoolExecutor
+        loop = asyncio.get_event_loop()
+
+        # Reutilizar executor global (criar uma vez no kafka_consumer_run)
+        if not hasattr(kafka_consumer_run, '_executor'):
+            kafka_consumer_run._executor = ThreadPoolExecutor(max_workers=50)
+
+        executor = kafka_consumer_run._executor
 
         if asyncio.iscoroutinefunction(function):
-            # Roda em thread separada com seu próprio event loop
-            # Garante que o event loop principal nunca seja bloqueado,
-            # permitindo que outras filas processem em paralelo
             await loop.run_in_executor(
-                None,
+                executor,
                 lambda: asyncio.run(function(consumer=consumer, msg=msg)),
             )
         else:
             await loop.run_in_executor(
-                None, lambda: function(consumer=consumer, msg=msg)
+                executor, lambda: function(consumer=consumer, msg=msg)
             )
-        tp = TopicPartition(msg.topic, msg.partition)
-        await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
-        logger.debug(
-            "Message processed from queue '{}': topic={}".format(queue_name, msg.topic)
-        )
     except Exception as e:
         logger.error(
             "Error calling action {} in queue '{}': {}".format(callback, queue_name, e)
