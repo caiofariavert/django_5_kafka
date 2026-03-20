@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 
 class SetupDjangoKafka:
 
-    async def create_topics(self, admin_client: AIOKafkaAdminClient, topics: list[str]) -> None:
+    async def create_topics(
+        self, admin_client: AIOKafkaAdminClient, topics: list[str]
+    ) -> None:
         """Create topics asynchronously"""
         new_topics = [
-            NewTopic(topic, num_partitions=3, replication_factor=1)
-            for topic in topics
+            NewTopic(topic, num_partitions=3, replication_factor=1) for topic in topics
         ]
 
         try:

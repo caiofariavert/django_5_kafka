@@ -116,7 +116,6 @@ async def _dispatch(
     queue_name: str,
 ) -> None:
     callback: str = topic_to_callback.get(msg.topic)
-    logger.error("Processing message | topic: {} | queue: {} | callback: {}".format(msg.topic, queue_name, callback))
 
     if callback is None:
         logger.error("No callback found for topic: {}".format(msg.topic))
@@ -130,33 +129,43 @@ async def _dispatch(
     module_path: str = ".".join(callback.split(".")[:-1])
     function_name: str = callback.split(".")[-1]
 
-    logger.debug("Attempting to load callback: {} | module: {} | function: {}".format(callback, module_path, function_name))
+    logger.debug(
+        "Attempting to load callback: {} | module: {} | function: {}".format(
+            callback, module_path, function_name
+        )
+    )
 
     try:
         module = importlib.import_module(module_path)
         logger.debug("Module loaded successfully: {}".format(module_path))
-    except ImportError as e:
-        logger.error("No module found for action: {} | Details: {}".format(callback, str(e)))
-        return
-    except Exception as e:
-        logger.error("Unexpected error importing action {}: {}".format(callback, str(e)))
-        return
-
-    try:
         function = getattr(module, function_name)
-    except AttributeError as e:
+    except AttributeError:
         logger.error(
             "No function '{}' found in module '{}' | Available: {}".format(
                 function_name, module_path, dir(module)
             )
         )
         return
+    except Exception as e:
+        logger.error(
+            "Error importing callback '{}' | module: {} | error: {}".format(
+                callback, module_path, e
+            )
+        )
+        return
 
     try:
+        loop = asyncio.get_running_loop()
+
         if asyncio.iscoroutinefunction(function):
-            await function(consumer=consumer, msg=msg)
+            # Roda em thread separada com seu próprio event loop
+            # Garante que o event loop principal nunca seja bloqueado,
+            # permitindo que outras filas processem em paralelo
+            await loop.run_in_executor(
+                None,
+                lambda: asyncio.run(function(consumer=consumer, msg=msg)),
+            )
         else:
-            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None, lambda: function(consumer=consumer, msg=msg)
             )
