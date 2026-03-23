@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import logging
 
 from asgiref.sync import sync_to_async
@@ -82,7 +83,8 @@ def dynamic_call_action(action: str, consumer: Consumer, msg: Message) -> None:
 
     # import module
     try:
-        module = __import__(module_path, fromlist=[function_name])
+        # module = __import__(module_path, fromlist=[function_name])
+        module = importlib.import_module(module_path)
     except:
         # print("No module found for action: {}".format(action))
         logger.error("No module found for action: {}".format(action))
