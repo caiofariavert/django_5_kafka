@@ -118,7 +118,7 @@ async def dynamic_call_action(action: str, consumer: Consumer, msg: Message) -> 
             await loop.run_in_executor(
                 _executor, lambda: function(consumer=consumer, msg=msg)
             )
-    except:
+    except Exception as e:
         # print("Error calling action: {}".format(action))
-        logger.error("Error calling action: {}".format(action))
+        logger.error("Error calling action: {}\nError: {}".format(action, e))
         return
