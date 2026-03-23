@@ -4,6 +4,8 @@ MAKEFLAGS += --silent
 BASE_PATH=${PWD}
 PYTHON_EXEC=python
 VENV_PATH=~/venv/django-kafka
+TRIVY_IMAGE ?= aquasec/trivy:0.69.3
+
 
 flake8:
 	echo "verify pep8 ..."
@@ -22,3 +24,17 @@ create_venv:
 upgrade_packages: pip_install
 	pip install pip-upgrade -y
 	pip-upgrade --skip-virtualenv-check
+
+
+security-scan:
+	docker run --rm \
+		-v $(PWD):/project \
+		-v trivy-cache:/root/.cache/trivy \
+		$(TRIVY_IMAGE) fs \
+		--scanners vuln,secret,misconfig \
+		--exit-code 0 \
+		--include-dev-deps \
+		--severity HIGH,CRITICAL,MEDIUM \
+		--skip-files src/.env \
+		--skip-dirs .docker/postgres \
+		/project/

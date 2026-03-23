@@ -1,6 +1,9 @@
+import asyncio
 import logging
 
+from asgiref.sync import sync_to_async
 from confluent_kafka import Consumer, Message
+from confluent_kafka.aio import AIOConsumer
 from django.conf import settings
 
 # Configura o logger específico para a sua biblioteca
@@ -9,27 +12,15 @@ logger = logging.getLogger(__name__)
 KAFKA_RUNNING: bool = True
 
 
-def kafka_consumer_run() -> None:
-
-    conf = {
-        "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVER,
-        "group.id": settings.KAFKA_GROUP_ID,
-        "auto.offset.reset": (
-            settings.KAFKA_OFFSET_RESET
-            if hasattr(settings, "KAFKA_OFFSET_RESET")
-            else "earliest"
-        ),
-    }
-
-    consumer: Consumer = Consumer(conf)
-
+async def __run_consumer(conf: dict) -> None:
+    consumer: AIOConsumer = AIOConsumer(conf)
     topics: list[str] = [key for key, _ in settings.KAFKA_TOPICS.items()]
 
-    consumer.subscribe(topics)
+    await consumer.subscribe(topics)
 
     try:
         while KAFKA_RUNNING:
-            msg: Message = consumer.poll(1.0)
+            msg: Message = await consumer.poll(1.0)
 
             if msg is None:
                 continue
@@ -49,16 +40,31 @@ def kafka_consumer_run() -> None:
                 # logger.warning(
                 #     "Empty callback for topic: {}. Skipping.".format(msg.topic())
                 # )
-                consumer.commit(message=msg)
+                await consumer.commit(message=msg)
                 continue
 
             # call the callback string as function
-            dynamic_call_action(callback, consumer, msg)
+            await sync_to_async(dynamic_call_action)(callback, consumer, msg)
     except Exception as e:
         # print(e)
         logger.error(e)
     finally:
-        consumer.close()
+        await consumer.close()
+
+
+def kafka_consumer_run() -> None:
+
+    conf = {
+        "bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVER,
+        "group.id": settings.KAFKA_GROUP_ID,
+        "auto.offset.reset": (
+            settings.KAFKA_OFFSET_RESET
+            if hasattr(settings, "KAFKA_OFFSET_RESET")
+            else "earliest"
+        ),
+    }
+
+    asyncio.run(__run_consumer(conf))
 
 
 def kafka_consumer_shutdown() -> None:

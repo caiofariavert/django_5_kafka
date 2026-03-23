@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import socket
 from types import FunctionType
 from uuid import uuid4
 
-from confluent_kafka import Producer
+from confluent_kafka.aio import AIOProducer
 from django.conf import settings
 
 # Configura o logger específico para a sua biblioteca
@@ -22,7 +23,7 @@ def producer(
         "client.id": socket.gethostname(),
     }
 
-    producer = Producer(conf)
+    producer = AIOProducer(conf)
 
     headers = {
         "producer_id": settings.KAFKA_CLIENT_ID,
@@ -50,13 +51,24 @@ def producer(
                 "offset": msg.offset(),
             })
 
-    producer.produce(
-        topic,
-        key=key,
-        value=message,
-        on_delivery=on_delivery or delivery_report,
-        headers=headers,
-    )
-    producer.flush()
+    async def produce_message(producer: AIOProducer, topic, key, message, on_delivery, headers):
+        try:
+            # produce() returns a Future; first await the coroutine to get the Future,
+            # then await the Future to get the delivered Message.
+            delivery_future = await producer.produce(
+                topic,
+                key=key,
+                value=message,
+                on_delivery=on_delivery or delivery_report,
+                headers=headers,
+            )
+            delivered_msg = await delivery_future
+            # Optionally flush any remaining buffered messages before shutdown
+            await producer.flush()
+        finally:
+            await producer.close()
+        return delivered_msg
+
+    delivery_info = asyncio.run(produce_message(producer, topic, key, message, on_delivery, headers))
 
     return delivery_info
