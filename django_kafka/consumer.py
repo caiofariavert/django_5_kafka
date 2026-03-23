@@ -1,19 +1,24 @@
 import asyncio
 import importlib
+import inspect
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
-from asgiref.sync import sync_to_async
 from confluent_kafka import Consumer, Message
 from confluent_kafka.aio import AIOConsumer
 from django.conf import settings
 
 # Configura o logger específico para a sua biblioteca
 logger = logging.getLogger(__name__)
+_executor: ThreadPoolExecutor | None = None
+
 
 KAFKA_RUNNING: bool = True
 
 
 async def __run_consumer(conf: dict) -> None:
+    global _executor
+    _executor = ThreadPoolExecutor(max_workers=10)
     consumer: AIOConsumer = AIOConsumer(conf)
     topics: list[str] = [key for key, _ in settings.KAFKA_TOPICS.items()]
 
@@ -45,12 +50,14 @@ async def __run_consumer(conf: dict) -> None:
                 continue
 
             # call the callback string as function
-            await sync_to_async(dynamic_call_action)(callback, consumer, msg)
+            await dynamic_call_action(callback, consumer, msg)
     except Exception as e:
         # print(e)
         logger.error(e)
     finally:
         await consumer.close()
+        if _executor:
+            _executor.shutdown(wait=True)
 
 
 def kafka_consumer_run() -> None:
@@ -73,7 +80,7 @@ def kafka_consumer_shutdown() -> None:
     KAFKA_RUNNING = False
 
 
-def dynamic_call_action(action: str, consumer: Consumer, msg: Message) -> None:
+async def dynamic_call_action(action: str, consumer: Consumer, msg: Message) -> None:
 
     # get path removing last part splited by dot
     module_path: str = ".".join(action.split(".")[:-1])
@@ -100,7 +107,17 @@ def dynamic_call_action(action: str, consumer: Consumer, msg: Message) -> None:
 
     # call function
     try:
-        function(consumer=consumer, msg=msg)
+        loop = asyncio.get_running_loop()
+
+        if inspect.iscoroutinefunction(function):
+            await loop.run_in_executor(
+                _executor,
+                lambda: asyncio.run(function(consumer=consumer, msg=msg)),
+            )
+        else:
+            await loop.run_in_executor(
+                _executor, lambda: function(consumer=consumer, msg=msg)
+            )
     except:
         # print("Error calling action: {}".format(action))
         logger.error("Error calling action: {}".format(action))
