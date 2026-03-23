@@ -19,7 +19,7 @@ KAFKA_RUNNING: bool = True
 async def __run_consumer(conf: dict) -> None:
     global _executor
     _executor = ThreadPoolExecutor(max_workers=10)
-    consumer: AIOConsumer = AIOConsumer(conf)
+    consumer: AIOConsumer = AIOConsumer(conf, max_workers=10)
     topics: list[str] = [key for key, _ in settings.KAFKA_TOPICS.items()]
 
     await consumer.subscribe(topics)
