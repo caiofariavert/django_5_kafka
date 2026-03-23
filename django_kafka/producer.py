@@ -23,8 +23,6 @@ def producer(
         "client.id": socket.gethostname(),
     }
 
-    producer = AIOProducer(conf)
-
     headers = {
         "producer_id": settings.KAFKA_CLIENT_ID,
         "hostname": socket.gethostname(),
@@ -51,7 +49,8 @@ def producer(
                 "offset": msg.offset(),
             })
 
-    async def produce_message(producer: AIOProducer, topic, key, message, on_delivery, headers):
+    async def produce_message(conf: dict, topic, key, message, on_delivery, headers):
+        producer = AIOProducer(conf)
         try:
             # produce() returns a Future; first await the coroutine to get the Future,
             # then await the Future to get the delivered Message.
@@ -69,6 +68,6 @@ def producer(
             await producer.close()
         return delivered_msg
 
-    delivery_info = asyncio.run(produce_message(producer, topic, key, message, on_delivery, headers))
+    delivery_info = asyncio.run(produce_message(conf, topic, key, message, on_delivery, headers))
 
     return delivery_info
